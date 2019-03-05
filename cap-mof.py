@@ -3,9 +3,9 @@ from sys import argv
 from math import sqrt, floor, ceil
 import numpy as np
 
-rTypical = 2.76 # Covalent radius = [rRb(2.1) + rO(0.66)]
+rTypical = 2.15423 # Covalent radius = [rRb(2.1) + rO(0.66)]?
 r2Typical = rTypical**2
-rOOTypical = 2.4 # Van der Waal radius, decrease if this causes problem 
+rOOTypical = 1.15 # Van der Waal radius, decrease if this causes problem 
 rOO2Typical = rOOTypical ** 2
 NOxTarget = 8
 
@@ -104,7 +104,7 @@ with open("C:/Users/chp19/OneDrive/Documents/mofs/new-coord", "w") as f:
         Naccepted += 1
         neighbors.append(newOx[:])
         addOx.append(newOx[:])
- print(len(addOx)) # the value should be 24*4 = 96, as there are 24 Rb missing 4 bonds
+ print(len(addOx)) # the value should be 24*6 = 144, as there are 24 Rb missing 6 bonds
   #print new XYZ file
  s = "     "
  print (line1 + len(addOx),file = f)
