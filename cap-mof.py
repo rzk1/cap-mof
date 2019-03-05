@@ -3,7 +3,7 @@ from sys import argv
 from math import sqrt, floor, ceil
 import numpy as np
 
-rTypical = 2.76# Covalent radius = [rRb(2.1) + rO(0.66)]
+rTypical = 2.76 # Covalent radius = [rRb(2.1) + rO(0.66)]
 r2Typical = rTypical**2
 rOOTypical = 2.4 # Van der Waal radius, decrease if this causes problem 
 rOO2Typical = rOOTypical ** 2
@@ -34,6 +34,7 @@ cations = []
 oxygens = []
 others = []
 neighbors = []
+addOx = [] # store all added Oxygens
 convert = [0,0,0]
 
 with open("C:/Users/chp19/OneDrive/Documents/mofs/mof-coord","r") as fp:
@@ -61,11 +62,10 @@ fp.close()
 NCations = len(cations)
 NOxygens = len(oxygens)
 
-if NCations % 12 != 0:
+if NCations % 12 != 0:  # There are total 36 Rb
   print ("Wrong number of cations: ", NCations)
   sys.exit(2)
 with open("C:/Users/chp19/OneDrive/Documents/mofs/new-coord", "w") as f:
- atomAdded = 0
  for ication in range(NCations):
   count = 0
   neighbors.clear()
@@ -79,41 +79,42 @@ with open("C:/Users/chp19/OneDrive/Documents/mofs/new-coord", "w") as f:
     if (r2 < r2Typical): # save this oxygen into a separate array called neighbors
      neighbors.append(oxygens[ioxygen])
      count += 1
-  #add oxygen
+  # add oxygen
   if (count < NOxTarget):
    Naccepted = 0
    while (Naccepted + count < NOxTarget):
-   # add 1 atom at a time, check if it's a good one with appropriate
-   # distance between Rb and old Oxygens,then keep adding until the array is full (8-coord)
-   # generate two random angles, use rTypical, compute xyz
+    # add 1 atom at a time, check if it's a good one with appropriate
+    # distance between Rb and old Oxygens,then keep adding until the array is full (8-coord)
+    # generate two random angles, use rTypical, compute xyz
     phi = random.uniform(0, 2*math.pi)
     theta = random.uniform(0, math.pi)
     convert = pol2cart(rTypical, phi, theta).split(" ")
     
-   # add coordinates back after assumption of (0,0,0) cat coord
+    # add coordinates back after assumption of (0,0,0) cat coord
     for icart in range(1,4):
      newOx[icart] = round(float(convert[icart-1])+ float(cations[ication][icart]),7)
      
-  # check overlap with other neighbor oxygens
+    # check overlap with other neighbor oxygens
     for iNeigh in range(len(neighbors)):
        rOO2 = 0.0
        for icart in range(1,4):
           dOO = distance(float(neighbors[iNeigh][icart]),float(newOx[icart]),float(ABC[0]))
           rOO2 += (dOO**2) / 2
-       if (rOO2 > rOO2Typical): 
-          Naccepted += 1
-          atomAdded += 1
-          neighbors.append(newOx[:])
+    if (rOO2 > rOO2Typical): 
+        Naccepted += 1
+        neighbors.append(newOx[:])
+        addOx.append(newOx[:])
+ print(len(addOx)) # the value should be 24*4 = 96, as there are 24 Rb missing 4 bonds
   #print new XYZ file
  s = "     "
- print (line1 + atomAdded,file = f)
+ print (line1 + len(addOx),file = f)
  print (ABC[0],s, ABC[1],s, ABC[2],s, file = f)
  for i in range(NCations):
    print(*cations[i], sep = "          ", file = f)
  for j in range(NOxygens):
    print(*oxygens[j], sep = "          ", file = f)
- for k in range(len(neighbors)):
-   print(*neighbors[k], sep = "         ", file = f)
+ for k in range(len(addOx)):
+   print(*addOx[k], sep = "         ", file = f)
  for l in range(len(others)):
    print(*others[l], sep = "         ", file = f) 
 f.close()
