@@ -3,27 +3,36 @@ from sys import argv
 from math import sqrt, floor, ceil
 import numpy as np
 
-rTypical = 2.15423 # Covalent radius = [rRb(2.1) + rO(0.66)]?
-r2Typical = rTypical**2
-rOOTypical = 1.15 # Van der Waal radius, decrease if this causes problem 
-rOO2Typical = rOOTypical ** 2
+dRbOTypical = 2.92 # Ionic radii: rRb(1.66) + rO(1.26)
+dOOTypical = 2*1.47 # Van der Waal radius: rO(1.52)
+dRbOCutoff = 1.15 * dRbOTypical
 NOxTarget = 8
+
+d2RbOTypical = dRbOTypical ** 2
+d2OOTypical = dOOTypical ** 2
+d2RbOCutoff = dRbOCutoff ** 2
 
 def distance(coord1, coord2, period):
  d = float(coord1) - float(coord2)
  d -= round(d/period)*period
  return d
 
+# RZK: it would be more elegant to return a list x,y,z of floats, not just one string
 def pol2cart(r, phi, theta):
-    x = str(r * np.sin(theta) * np.cos(phi))
-    y = str(r * np.sin(theta) * np.sin(phi))
-    z = str(r * np.cos(theta))
-    str_xyz = x + " " + y + " " + z
-    return str_xyz
+    #x = str(r * np.sin(theta) * np.cos(phi))
+    #y = str(r * np.sin(theta) * np.sin(phi))
+    #z = str(r * np.cos(theta))
+    #str_xyz = x + " " + y + " " + z
+    #return str_xyz
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+    return (x,y,z)
 
 # =============================================================
 # ------------- the main program ------------------------------
 # =============================================================
+script, inputfile = argv
 
 # read and process atomic coordinates
 # loop over the lines of the coordinate file
@@ -37,7 +46,7 @@ neighbors = []
 addOx = [] # store all added Oxygens
 convert = [0,0,0]
 
-with open("C:/Users/chp19/OneDrive/Documents/mofs/mof-coord","r") as fp:
+with open(inputfile,"r") as fp:
  for line in fp:
      
   linenumber += 1
@@ -47,74 +56,116 @@ with open("C:/Users/chp19/OneDrive/Documents/mofs/mof-coord","r") as fp:
    line1 = int(line)
   elif linenumber == 2:
    ABC[0], ABC[1], ABC[2] = line.split()
+   for icart in range(3):
+    ABC[icart]=float(ABC[icart])
   else:
    xyzStr[0], xyzStr[1], xyzStr[2], xyzStr[3] = line.split()
    
    # save zero-image coordinates
-   if xyzStr[0]== "Rb":
+   if xyzStr[0] == "Rb":
     cations.append(xyzStr[:])
-   elif xyzStr[0]== "O":
+   elif xyzStr[0] == "O":
     oxygens.append(xyzStr[:])
    else:
     others.append(xyzStr[:])
+
+# close the input file
 fp.close()
 
 NCations = len(cations)
 NOxygens = len(oxygens)
+convert=[0.0,0.0,0.0]
 
-if NCations % 12 != 0:  # There are total 36 Rb
-  print ("Wrong number of cations: ", NCations)
-  sys.exit(2)
-with open("C:/Users/chp19/OneDrive/Documents/mofs/new-coord", "w") as f:
- for ication in range(NCations):
-  count = 0
-  neighbors.clear()
-  newOx = ['O',0,0,0]
-  for ioxygen in range(NOxygens):
-    r2=0.0
-    for icart in range(1,4): # 0th col is character 
-     # impose minimum image first
-     dCO = distance(float(cations[ication][icart]),float(oxygens[ioxygen][icart]),float(ABC[0]))
-     r2 += (dCO**2) / 2
-    if (r2 < r2Typical): # save this oxygen into a separate array called neighbors
-     neighbors.append(oxygens[ioxygen])
-     count += 1
-  # add oxygen
-  if (count < NOxTarget):
-   Naccepted = 0
-   while (Naccepted + count < NOxTarget):
-    # add 1 atom at a time, check if it's a good one with appropriate
-    # distance between Rb and old Oxygens,then keep adding until the array is full (8-coord)
-    # generate two random angles, use rTypical, compute xyz
-    phi = random.uniform(0, 2*math.pi)
-    theta = random.uniform(0, math.pi)
-    convert = pol2cart(rTypical, phi, theta).split(" ")
+if NCations % 24 != 0:
+ print ("Wrong number of cations: ", NCations)
+ sys.exit(2)
+
+# RZK: the output file should be opened later, not here
+#with open(inputfile+".aug.xyz", "w") as f:
+for ication in range(NCations):
+ count = 0
+ neighbors.clear()
+ newOx = ['O',0,0,0]
+
+ # RZK: more comments are necessary
+ # check which oxygen atoms are neighbors
+ for ioxygen in range(NOxygens):
+  d2=0.0
+  for icart in range(1,4): # 0th col is character 
+   # impose minimum image first
+   # RZK: there is a bug in the following line
+   #dCO = distance(float(cations[ication][icart]),float(oxygens[ioxygen][icart]),float(ABC[0]))
+   dCO = distance(float(cations[ication][icart]),float(oxygens[ioxygen][icart]),float(ABC[icart-1]))
+   # RZK: division by two is not necessary
+   #d2 += (dCO**2) / 2
+   d2 += dCO**2
+  if (d2 < d2RbOCutoff): # save this oxygen into a separate array called neighbors
+   neighbors.append(oxygens[ioxygen])
+   count += 1
+
+ # add new oxygen neighbors if this cation does not have enough neighbors
+ if (count < NOxTarget):
+  Naccepted = 0
+  Ntrials = 1
+  while (Naccepted + count < NOxTarget):
+
+   # generate random coordinates (trail insertion)
+   # add 1 atom at a time, check if it's a good one with appropriate
+   # distance between Rb and old Oxygens,then keep adding until the array is full (8-coord)
+   # generate two random angles, use dRbOTypical, compute xyz
+   phi = random.uniform(0, 2*math.pi)
+   theta = random.uniform(0, math.pi)
+   #RZK: convert = pol2cart(dRbOTypical, phi, theta).split(" ")
+   convert[:] = pol2cart(dRbOTypical, phi, theta)
+   
+   # add coordinates back after assumption of (0,0,0) cat coord
+   for icart in range(1,4):
+    # RZK: is rounding really necessary?
+    #newOx[icart] = round(float(convert[icart-1])+ float(cations[ication][icart]),7)
+    newOx[icart] = float(convert[icart-1]) + float(cations[ication][icart])
     
-    # add coordinates back after assumption of (0,0,0) cat coord
+   # check overlap with other neighbor oxygens
+   badContactFound = False
+   for iNeigh in range(len(neighbors)):
+    # RZK: your code has different identations - bad style, especially in python
+    dOO2 = 0.0
     for icart in range(1,4):
-     newOx[icart] = round(float(convert[icart-1])+ float(cations[ication][icart]),7)
-     
-    # check overlap with other neighbor oxygens
-    for iNeigh in range(len(neighbors)):
-       rOO2 = 0.0
-       for icart in range(1,4):
-          dOO = distance(float(neighbors[iNeigh][icart]),float(newOx[icart]),float(ABC[0]))
-          rOO2 += (dOO**2) / 2
-    if (rOO2 > rOO2Typical): 
-        Naccepted += 1
-        neighbors.append(newOx[:])
-        addOx.append(newOx[:])
- print(len(addOx)) # the value should be 24*6 = 144, as there are 24 Rb missing 6 bonds
-  #print new XYZ file
- s = "     "
- print (line1 + len(addOx),file = f)
- print (ABC[0],s, ABC[1],s, ABC[2],s, file = f)
- for i in range(NCations):
-   print(*cations[i], sep = "          ", file = f)
- for j in range(NOxygens):
-   print(*oxygens[j], sep = "          ", file = f)
- for k in range(len(addOx)):
-   print(*addOx[k], sep = "         ", file = f)
- for l in range(len(others)):
-   print(*others[l], sep = "         ", file = f) 
+     # RZK: same bug dOO = distance(float(neighbors[iNeigh][icart]),float(newOx[icart]),float(ABC[0]))
+     dOO = distance(float(neighbors[iNeigh][icart]),float(newOx[icart]),float(ABC[icart-1]))
+     # RZK: same bug dOO2 += (dOO**2) / 2
+     dOO2 += dOO**2
+   # RZK: this is a serious bug - incorrect identation, breaks the logic of the code
+   #if (dOO2 > d2OOTypical): 
+    if (dOO2 < d2OOTypical): 
+     badContactFound = True
+     # no need to consider other oxigen neighbors
+     break
+
+   if (not badContactFound):
+    Naccepted += 1
+    neighbors.append(newOx[:])
+    addOx.append(newOx[:])
+    print("Cation %3d. Oxygen neighbors (old, new): %4d%4d. Attempts: %6d" % (ication,count,Naccepted,Ntrials))   
+
+   Ntrials += 1
+
+# RZK: xyz file is incorrect! It contains two periodic images of the same Rb atoms!
+# There should be 24 Rb atoms total, not 36
+print("There are %4d new oxygen atoms " % len(addOx)) # the value should be 24*6 = 144, as there are 24 Rb missing 6 bonds
+
+f = open(inputfile+".aug.xyz", "w")
+print (line1 + len(addOx), file = f)
+# RZK: learn how to print out formatted numbers in python 
+print ("%15.8f%15.8f%15.8f" % (ABC[0],ABC[1],ABC[2]), file = f)
+for i in range(NCations):
+ # RZK: format these lines properly as well
+ print(*cations[i], sep = "          ", file = f)
+ #print("%3s%15.8f%15.8f%15.8f" % *cations[i], file = f)
+for j in range(NOxygens):
+ print(*oxygens[j], sep = "          ", file = f)
+for k in range(len(addOx)):
+ print(*addOx[k], sep = "         ", file = f)
+for l in range(len(others)):
+ print(*others[l], sep = "         ", file = f) 
 f.close()
+
